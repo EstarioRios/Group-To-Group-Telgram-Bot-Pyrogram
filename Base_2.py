@@ -4,6 +4,7 @@ from telethon.errors.rpcerrorlist import (
     InviteHashInvalidError,
     InviteHashExpiredError,
 )
+import os
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantsRequest
 from telethon.tl.types import ChannelParticipantsRecent
@@ -14,10 +15,10 @@ import asyncio
 
 # Constants for member limit and group links
 limit_m = 12
-TGroupLink = ""  # Target group link to join
-FGroupLink = ""  # Source group link to fetch members from
+TGroupLink = "https://t.me/+dcidNPMtkYo1MzU0"  # Target group link to join
+FGroupLink = "https://t.me/bbgjfgjgg"  # Source group link to fetch members from
 
-
+# List of proxies
 proxys = [
     {
         "type": "mtproxy",
@@ -51,7 +52,6 @@ proxys = [
     },
 ]
 
-
 # Accounts list to iterate over
 accounts = [
     {
@@ -70,6 +70,46 @@ accounts = [
         "PhoneNumber": "+989170057134",
     },
 ]
+
+
+# async def create_client_with_proxy(api_id, api_hash, phone_number):
+#     """
+#     Create a Telegram client with a random proxy from the list.
+#     If the proxy fails, try another one.
+#     """
+#     for _ in range(len(proxys)):
+#         proxy = random.choice(proxys)
+#         try:
+#             client = TelegramClient(
+#                 StringSession(""),
+#                 api_id,
+#                 api_hash,
+#                 proxy=(proxy["type"], proxy["ip"], proxy["port"], proxy["secret"]),
+#             )
+#             await client.start(phone_number)
+#             print(f"Successfully connected using proxy: {proxy['ip']}")
+#             return client
+#         except Exception as e:
+#             print(f"Failed to connect using proxy {proxy['ip']}: {e}")
+#     raise Exception("All proxies failed to connect.")
+
+
+async def create_client_without_proxy(api_id, api_hash, phone_number, session_file):
+    session_path = os.path.join("sessions", session_file)
+    if not os.path.exists("sessions"):
+        os.makedirs("sessions")
+
+    if os.path.isfile(session_path):
+        # Use existing session file
+        client = TelegramClient(StringSession(session_path), api_id, api_hash)
+    else:
+        # Create a new session file
+        client = TelegramClient(StringSession(), api_id, api_hash)
+
+        await client.start(phone_number)
+        return client
+
+    raise Exception("All proxies failed to connect.")
 
 
 async def GeneralCheck(client, GoCLink):
@@ -185,72 +225,58 @@ async def AddMemberToGroup(client, group_link, user_id):
 
 
 async def main_do_mother():
-    """
-    main_do_mother: Main function to handle the Telegram actions for all accounts.
-    Iterates over accounts and performs the Telegram operations.
-    """
     try:
         for account in accounts:
             api_id = account["ApiId"]
             api_hash = account["ApiHash"]
             phone_number = account["PhoneNumber"]
+            session_file = account["SessionFile"]
 
-            client = TelegramClient(StringSession(""), api_id, api_hash)
+            client = await create_client_without_proxy(
+                api_id, api_hash, phone_number, session_file
+            )
 
             async def main_do_TelegramSection():
-                """
-                main_do_TelegramSection: Inner function to manage Telegram client activities.
-                """
-                await client.start(phone_number)
-
                 while members_id_list:
                     for user_id in members_id_list:
                         many_time = 0
-                        while many_time < 11:  # Corrected condition
+                        while many_time < 11:
                             await JoinToGroup(client, TGroupLink)
-                            members_id_list.remove(user_id)  # Remove user after action
+                            members_id_list.remove(user_id)
                             many_time += 1
 
-                    await asyncio.sleep(86400)  # Use await to avoid blocking
+                    await asyncio.sleep(86400)
 
-            await main_do_TelegramSection()  # Corrected function call
+            await main_do_TelegramSection()
 
     except Exception as e:
         print(f"In main_do_mother Process something went wrong: {e}")
 
 
 async def main_check_mother():
-    """
-    main_check_mother: Checks prerequisites before starting the main process.
-    Verifies links and member availability before executing main_do_mother.
-    """
     try:
         random_account = random.choice(accounts)
         api_id = random_account["ApiId"]
         api_hash = random_account["ApiHash"]
         phone_number = random_account["PhoneNumber"]
+        session_file = random_account["SessionFile"]
 
-        client = TelegramClient(StringSession(""), api_id, api_hash)
+        client = await create_client_without_proxy(
+            api_id, api_hash, phone_number, session_file
+        )
 
         async def main_check_TelegramSection():
-            """
-            main_check_TelegramSection: Verifies the links and checks member existence.
-            """
-            await client.start(phone_number)
-
-            # Check if both origin and destination links are valid
             Resual_Link_Orgin = await GeneralCheck(client, FGroupLink)
             Resual_Link_Destination = await GeneralCheck(client, TGroupLink)
 
             if Resual_Link_Orgin and Resual_Link_Destination:
-                # Check if there are members in the source group
                 members_status = await MembersCheck(client, FGroupLink)
 
                 if members_status:
                     global members_id_list
                     members_id_list = await GetMembers(client, FGroupLink, limit_m)
                     print("Checking finished, and found members.")
-                    await main_do_mother()  # Corrected function call
+                    await main_do_mother()
                 else:
                     print("There is no member.")
             else:
@@ -259,11 +285,11 @@ async def main_check_mother():
                 if not Resual_Link_Orgin:
                     print("Origin Link is Wrong.")
 
-        await main_check_TelegramSection()  # Corrected function call
+        await main_check_TelegramSection()
 
     except Exception as e:
-        print(f"Something went wrong in Checking Process: {e}")
+        print(f"In main_check_mother Process something went wrong: {e}")
 
 
-# Main entry point to run the async function
-asyncio.run(main_check_mother())
+if __name__ == "__main__":
+    asyncio.run(main_check_mother())
