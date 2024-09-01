@@ -12,6 +12,7 @@ from telethon.tl.functions.channels import (
     InviteToChannelRequest,
     JoinChannelRequest,
 )
+
 from telethon.errors import FloodWaitError
 from telethon.tl.types import ChannelParticipantsSearch, ChannelParticipantsRecent
 import os
@@ -127,7 +128,7 @@ async def get_members(
 ):
     """
     Retrieves user IDs from a group/channel based on the visibility of members.
-    If members are visible, extracts user IDs from messages.
+    If members are visible, extracts user IDs from messages until reaching the limit.
     If members are hidden, fetches user IDs from the participant list.
     :param client: TelegramClient instance.
     :param group_link: The group or channel link to fetch messages or members from.
@@ -140,14 +141,13 @@ async def get_members(
     # Check if the members are hidden
     members_status = await members_check(client, group_link)
 
-    if members_status:
+    if members_status == True:
         # If members are not hidden, fetch messages and extract sender IDs
         try:
             entity = await client.get_entity(group_link)
             offset_id = 0
-            total_messages = 0
 
-            while total_messages < limit_messages:
+            while len(sender_ids) < limit_members:
                 history = await client(
                     GetHistoryRequest(
                         peer=entity,
@@ -165,11 +165,18 @@ async def get_members(
                     break
 
                 for message in history.messages:
-                    if message.from_id:
+                    if message.from_id and message.from_id.user_id:
                         sender_ids.add(message.from_id.user_id)
 
+                    # If the number of unique user IDs has reached the limit, exit the loop
+                    if len(sender_ids) >= limit_members:
+                        break
+
                 offset_id = history.messages[-1].id
-                total_messages += len(history.messages)
+
+                # If the number of unique user IDs has reached the limit, exit the loop
+                if len(sender_ids) >= limit_members:
+                    break
 
         except Exception as e:
             print(f"Error while fetching messages: {e}")
