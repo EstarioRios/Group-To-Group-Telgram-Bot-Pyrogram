@@ -4,6 +4,9 @@ from telethon.errors.rpcerrorlist import (
     InviteHashInvalidError,
     InviteHashExpiredError,
 )
+from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.channels import GetParticipantsRequest
+from telethon.tl.types import ChannelParticipantsRecent
 import os
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantsRequest
@@ -129,26 +132,44 @@ async def GeneralCheck(client, GoCLink):
 
 async def MembersCheck(client, GoCLink):
     """
-    MembersCheck: Checks if the group/channel has members.
+    MembersCheck: Checks if the members of the group/channel are hidden.
     :param client: TelegramClient instance.
     :param GoCLink: The group or channel link to check members.
-    :return: True if there are members, False otherwise.
+    :return: True if members are hidden, False otherwise.
     """
     try:
+        # Get full group information
         full_group = await client(GetFullChannelRequest(GoCLink))
+
+        # Extract the total number of members from full_group
+        reported_member_count = full_group.full_chat.participants_count
+
+        # Fetch a sample of members to check if we can access them
         participants = await client(
             GetParticipantsRequest(
                 full_group.chats[0],
                 ChannelParticipantsRecent(),
                 offset=0,
-                limit=1,
+                limit=1,  # Just need to check if there are any members
                 hash=0,
             )
         )
-        return bool(participants.users)
+
+        # Determine if the members are hidden
+        if reported_member_count == 0:
+            # If reported member count is 0, we cannot determine anything
+            return False
+
+        if len(participants.users) > 0:
+            # If we can fetch at least one member, members are not hidden
+            return False
+        else:
+            # If we cannot fetch members but the reported count is non-zero, members are likely hidden
+            return True
+
     except Exception as e:
         print(f"Error in MembersCheck: {e}")
-        return False
+        return False  # Return False if there was an error
 
 
 async def GetMembers(client, GoCLink, limit_m):
@@ -159,35 +180,44 @@ async def GetMembers(client, GoCLink, limit_m):
     :param limit_m: Limit of members to fetch.
     :return: A list of member IDs.
     """
-    member_ids = []
-    try:
-        full_group = await client(GetFullChannelRequest(GoCLink))
-        offset = 0
 
-        while True:
-            participants = await client(
-                GetParticipantsRequest(
-                    full_group.chats[0],
-                    ChannelParticipantsRecent(),
-                    offset=offset,
-                    limit=limit_m,
-                    hash=0,
+    Member_is_hide = MembersCheck(client, GoCLink)
+    if Member_is_hide == True:
+        pass
+
+    else:
+
+        member_ids = []
+        try:
+            full_group = await client(GetFullChannelRequest(GoCLink))
+            offset = 0
+
+            while True:
+                participants = await client(
+                    GetParticipantsRequest(
+                        full_group.chats[0],
+                        ChannelParticipantsRecent(),
+                        offset=offset,
+                        limit=limit_m,
+                        hash=0,
+                    )
                 )
-            )
-            # Append participant IDs to member_ids list
-            member_ids.extend([participant.id for participant in participants.users])
+                # Append participant IDs to member_ids list
+                member_ids.extend(
+                    [participant.id for participant in participants.users]
+                )
 
-            # Break loop if no more participants
-            if not participants.users:
-                break
+                # Break loop if no more participants
+                if not participants.users:
+                    break
 
-            offset += len(participants.users)
+                offset += len(participants.users)
 
-        return member_ids
+            return member_ids
 
-    except Exception as e:
-        print(f"Error in Getting Members: {e}")
-        return []
+        except Exception as e:
+            print(f"Error in Getting Members: {e}")
+            return []
 
 
 async def JoinToGroup(client, group_link):
