@@ -14,34 +14,15 @@ from telethon.tl.functions.channels import (
 )
 from telethon.errors import FloodWaitError
 from telethon.tl.types import ChannelParticipantsSearch, ChannelParticipantsRecent
-from telethon.sessions import StringSession
 import os
 import random
 import asyncio
-
 
 # Constants for member limit and group links
 LIMIT_MESSAGES = 5000  # The maximum number of messages to fetch
 LIMIT_MEMBERS = 12  # The number of members to check in MembersCheck
 T_GROUP_LINK = "https://t.me/+dcidNPMtkYo1MzU0"  # Target group link to join
 F_GROUP_LINK = "https://t.me/bbgjfgjgg"  # Source group link to fetch members from
-
-# List of proxies
-PROXIES = [
-    {
-        "type": "mtproxy",
-        "ip": "185.115.161.33",
-        "port": 68,
-        "secret": "eeRigzNJvXrFGRMCIMJdEA",
-    },
-    {
-        "type": "mtproxy",
-        "ip": "95.169.173.135",
-        "port": 85,
-        "secret": "7gggggggggggggggggggggh0cmFuc2xhdGUuZ29v",
-    },
-    # Additional proxies can be added here
-]
 
 # Accounts list to iterate over
 ACCOUNTS = [
@@ -66,7 +47,7 @@ ACCOUNTS = [
 ]
 
 
-async def create_client_without_proxy(api_id, api_hash, phone_number, session_file):
+async def create_client(api_id, api_hash, phone_number, session_file):
     """
     Create a Telegram client without using a proxy, utilizing an existing or new session file.
     :param api_id: API ID of the Telegram app.
@@ -82,7 +63,6 @@ async def create_client_without_proxy(api_id, api_hash, phone_number, session_fi
 
     # Use existing session file or create a new one
     client = TelegramClient(session_path, api_id, api_hash)
-
     await client.start(phone_number)
 
     return client
@@ -149,7 +129,6 @@ async def get_members(
     Retrieves user IDs from a group/channel based on the visibility of members.
     If members are visible, extracts user IDs from messages.
     If members are hidden, fetches user IDs from the participant list.
-
     :param client: TelegramClient instance.
     :param group_link: The group or channel link to fetch messages or members from.
     :param limit_messages: Maximum number of messages to fetch if members are visible.
@@ -271,12 +250,12 @@ async def main_do_mother():
             phone_number = account["PhoneNumber"]
             session_file = account["SessionFile"]
 
-            client = await create_client_without_proxy(
-                api_id, api_hash, phone_number, session_file
-            )
+            client = await create_client(api_id, api_hash, phone_number, session_file)
 
             async def main_do_telegram_section():
-                members_id_list = get_members(client, F_GROUP_LINK, LIMIT_MESSAGES)
+                members_id_list = await get_members(
+                    client, F_GROUP_LINK, LIMIT_MESSAGES
+                )
                 while members_id_list:
                     for user_id in members_id_list:
                         many_time = 0
@@ -305,9 +284,7 @@ async def main_check_mother():
         phone_number = random_account["PhoneNumber"]
         session_file = random_account["SessionFile"]
 
-        client = await create_client_without_proxy(
-            api_id, api_hash, phone_number, session_file
-        )
+        client = await create_client(api_id, api_hash, phone_number, session_file)
 
         async def main_check_telegram_section():
             result_link_origin = await general_check(client, F_GROUP_LINK)
