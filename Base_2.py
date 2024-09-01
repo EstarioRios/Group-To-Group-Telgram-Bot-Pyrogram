@@ -3,26 +3,31 @@ from telethon.errors.rpcerrorlist import (
     ChatAdminRequiredError,
     InviteHashInvalidError,
     InviteHashExpiredError,
+    UserAlreadyParticipantError,
 )
-from telethon.tl.functions.channels import GetFullChannelRequest
-from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsRecent
-import os
+from telethon.tl.functions.messages import GetHistoryRequest
+from telethon.tl.functions.channels import (
+    GetFullChannelRequest,
+    GetParticipantsRequest,
+    InviteToChannelRequest,
+    JoinChannelRequest,
+)
+from telethon.errors import FloodWaitError
+from telethon.tl.types import ChannelParticipantsSearch, ChannelParticipantsRecent
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsRecent
-from telethon.errors import UserAlreadyParticipantError
-from telethon.tl.functions.channels import JoinChannelRequest, InviteToChannelRequest
+import os
 import random
 import asyncio
 
+
 # Constants for member limit and group links
-limit_m = 12
-TGroupLink = "https://t.me/+dcidNPMtkYo1MzU0"  # Target group link to join
-FGroupLink = "https://t.me/bbgjfgjgg"  # Source group link to fetch members from
+LIMIT_MESSAGES = 5000  # The maximum number of messages to fetch
+LIMIT_MEMBERS = 12  # The number of members to check in MembersCheck
+T_GROUP_LINK = "https://t.me/+dcidNPMtkYo1MzU0"  # Target group link to join
+F_GROUP_LINK = "https://t.me/bbgjfgjgg"  # Source group link to fetch members from
 
 # List of proxies
-proxys = [
+PROXIES = [
     {
         "type": "mtproxy",
         "ip": "185.115.161.33",
@@ -35,111 +40,83 @@ proxys = [
         "port": 85,
         "secret": "7gggggggggggggggggggggh0cmFuc2xhdGUuZ29v",
     },
-    {
-        "type": "mtproxy",
-        "ip": "95.169.173.169",
-        "port": 85,
-        "secret": "7gggggggggggggggggggggh0cmFuc2xhdGUuZ29v",
-    },
-    {
-        "type": "mtproxy",
-        "ip": "95.169.173.170",
-        "port": 85,
-        "secret": "7gggggggggggggggggggggh0cmFuc2xhdGUuZ29v",
-    },
-    {
-        "type": "mtproxy",
-        "ip": "95.169.173.199",
-        "port": 85,
-        "secret": "7gggggggggggggggggggggh0cmFuc2xhdGUuZ29v",
-    },
+    # Additional proxies can be added here
 ]
 
 # Accounts list to iterate over
-accounts = [
+ACCOUNTS = [
     {
         "ApiId": "23759941",
         "ApiHash": "bcdc20b52b9b110fa123529f8092a3db",
         "PhoneNumber": "+989046920122",
+        "SessionFile": "session1.session",
     },
     {
         "ApiId": "26032687",
         "ApiHash": "674a8fa758172eb4e187a9330266834a",
         "PhoneNumber": "+989934885436",
+        "SessionFile": "session2.session",
     },
     {
         "ApiId": "15852598",
         "ApiHash": "6e3a9b6adac1aaa92153b3c16da75bd2",
         "PhoneNumber": "+989170057134",
+        "SessionFile": "session3.session",
     },
 ]
 
 
-# async def create_client_with_proxy(api_id, api_hash, phone_number):
-#     """
-#     Create a Telegram client with a random proxy from the list.
-#     If the proxy fails, try another one.
-#     """
-#     for _ in range(len(proxys)):
-#         proxy = random.choice(proxys)
-#         try:
-#             client = TelegramClient(
-#                 StringSession(""),
-#                 api_id,
-#                 api_hash,
-#                 proxy=(proxy["type"], proxy["ip"], proxy["port"], proxy["secret"]),
-#             )
-#             await client.start(phone_number)
-#             print(f"Successfully connected using proxy: {proxy['ip']}")
-#             return client
-#         except Exception as e:
-#             print(f"Failed to connect using proxy {proxy['ip']}: {e}")
-#     raise Exception("All proxies failed to connect.")
-
-
 async def create_client_without_proxy(api_id, api_hash, phone_number, session_file):
+    """
+    Create a Telegram client without using a proxy, utilizing an existing or new session file.
+    :param api_id: API ID of the Telegram app.
+    :param api_hash: API Hash of the Telegram app.
+    :param phone_number: The phone number associated with the Telegram account.
+    :param session_file: The session file name to store session details.
+    :return: Initialized and started Telegram client.
+    """
     session_path = os.path.join("sessions", session_file)
+
     if not os.path.exists("sessions"):
         os.makedirs("sessions")
 
-    if os.path.isfile(session_path):
-        # Use existing session file
-        client = TelegramClient(StringSession(session_path), api_id, api_hash)
-    else:
-        # Create a new session file
-        client = TelegramClient(StringSession(), api_id, api_hash)
+    # Use existing session file or create a new one
+    client = TelegramClient(session_path, api_id, api_hash)
 
-        await client.start(phone_number)
-        return client
+    await client.start(phone_number)
 
-    raise Exception("All proxies failed to connect.")
+    return client
 
 
-async def GeneralCheck(client, GoCLink):
+async def general_check(client, group_link):
     """
-    GeneralCheck: Checks if the provided link is valid for a channel.
+    Check if the provided link is valid for a channel.
     :param client: TelegramClient instance.
-    :param GoCLink: The group or channel link to check.
+    :param group_link: The group or channel link to check.
     :return: True if valid, False otherwise.
     """
     try:
-        result = await client(GetFullChannelRequest(GoCLink))
+        await client(GetFullChannelRequest(group_link))
         return True
-    except Exception as e:
-        print(f"Error in GeneralCheck: {e}")
+    except (
+        InviteHashInvalidError,
+        InviteHashExpiredError,
+        ChatAdminRequiredError,
+    ) as e:
+        print(f"Error in general_check: {e}")
         return False
 
 
-async def MembersCheck(client, GoCLink):
+async def members_check(client, group_link):
     """
-    MembersCheck: Checks if the members of the group/channel are hidden.
+    Check if the members of the group/channel are hidden.
     :param client: TelegramClient instance.
-    :param GoCLink: The group or channel link to check members.
+    :param group_link: The group or channel link to check members.
     :return: True if members are hidden, False otherwise.
     """
     try:
         # Get full group information
-        full_group = await client(GetFullChannelRequest(GoCLink))
+        full_group = await client(GetFullChannelRequest(group_link))
 
         # Extract the total number of members from full_group
         reported_member_count = full_group.full_chat.participants_count
@@ -147,8 +124,8 @@ async def MembersCheck(client, GoCLink):
         # Fetch a sample of members to check if we can access them
         participants = await client(
             GetParticipantsRequest(
-                full_group.chats[0],
-                ChannelParticipantsRecent(),
+                channel=full_group.chats[0],
+                filter=ChannelParticipantsRecent(),
                 offset=0,
                 limit=1,  # Just need to check if there are any members
                 hash=0,
@@ -157,72 +134,101 @@ async def MembersCheck(client, GoCLink):
 
         # Determine if the members are hidden
         if reported_member_count == 0:
-            # If reported member count is 0, we cannot determine anything
-            return False
+            return False  # If reported member count is 0, we cannot determine anything
 
-        if len(participants.users) > 0:
-            # If we can fetch at least one member, members are not hidden
-            return False
-        else:
-            # If we cannot fetch members but the reported count is non-zero, members are likely hidden
-            return True
-
+        return len(participants.users) == 0  # True if no participants fetched
     except Exception as e:
-        print(f"Error in MembersCheck: {e}")
-        return False  # Return False if there was an error
+        print(f"Error in members_check: {e}")
+        return False
 
 
-async def GetMembers(client, GoCLink, limit_m):
+async def get_members(
+    client, group_link, limit_messages=LIMIT_MESSAGES, limit_members=LIMIT_MEMBERS
+):
     """
-    GetMembers: Retrieves the member IDs from a group/channel.
+    Retrieves user IDs from a group/channel based on the visibility of members.
+    If members are visible, extracts user IDs from messages.
+    If members are hidden, fetches user IDs from the participant list.
+
     :param client: TelegramClient instance.
-    :param GoCLink: The group or channel link to fetch members from.
-    :param limit_m: Limit of members to fetch.
-    :return: A list of member IDs.
+    :param group_link: The group or channel link to fetch messages or members from.
+    :param limit_messages: Maximum number of messages to fetch if members are visible.
+    :param limit_members: Maximum number of members to fetch if members are hidden.
+    :return: A list of unique user IDs.
     """
+    sender_ids = set()  # Use a set to store unique user IDs
 
-    Member_is_hide = MembersCheck(client, GoCLink)
-    if Member_is_hide == True:
-        pass
+    # Check if the members are hidden
+    members_status = await members_check(client, group_link)
 
-    else:
-
-        member_ids = []
+    if members_status:
+        # If members are not hidden, fetch messages and extract sender IDs
         try:
-            full_group = await client(GetFullChannelRequest(GoCLink))
-            offset = 0
+            entity = await client.get_entity(group_link)
+            offset_id = 0
+            total_messages = 0
 
-            while True:
-                participants = await client(
-                    GetParticipantsRequest(
-                        full_group.chats[0],
-                        ChannelParticipantsRecent(),
-                        offset=offset,
-                        limit=limit_m,
+            while total_messages < limit_messages:
+                history = await client(
+                    GetHistoryRequest(
+                        peer=entity,
+                        offset_id=offset_id,
+                        offset_date=None,
+                        add_offset=0,
+                        limit=100,
+                        max_id=0,
+                        min_id=0,
                         hash=0,
                     )
                 )
-                # Append participant IDs to member_ids list
-                member_ids.extend(
-                    [participant.id for participant in participants.users]
-                )
 
-                # Break loop if no more participants
-                if not participants.users:
+                if not history.messages:
                     break
 
-                offset += len(participants.users)
+                for message in history.messages:
+                    if message.from_id:
+                        sender_ids.add(message.from_id.user_id)
 
-            return member_ids
+                offset_id = history.messages[-1].id
+                total_messages += len(history.messages)
 
         except Exception as e:
-            print(f"Error in Getting Members: {e}")
-            return []
+            print(f"Error while fetching messages: {e}")
+
+    else:
+        # If members are hidden, fetch members from the participant list
+        try:
+            group_entity = await client.get_entity(group_link)
+
+            participants = await client(
+                GetParticipantsRequest(
+                    channel=group_entity,
+                    filter=ChannelParticipantsSearch(""),
+                    offset=0,
+                    limit=limit_members,  # Fetch up to 'limit_members' members
+                    hash=0,
+                )
+            )
+
+            # Extract user IDs from participants
+            sender_ids = {participant.id for participant in participants.users}
+
+        except FloodWaitError as e:
+            print(
+                f"Flood wait error: Need to wait for {e.seconds} seconds before retrying."
+            )
+            await asyncio.sleep(e.seconds)  # Wait before retrying
+            return await get_members(client, group_link, limit_messages, limit_members)
+
+        except Exception as e:
+            print(f"Error while fetching participants: {e}")
+
+    return list(sender_ids)
 
 
-async def JoinToGroup(client, group_link):
+async def join_to_group(client, group_link):
     """
-    JoinToGroup: Makes the client join a public group or channel.
+    Makes the client join a public group or channel.
     :param client: TelegramClient instance.
     :param group_link: The group or channel link to join.
     """
@@ -236,9 +242,9 @@ async def JoinToGroup(client, group_link):
         print(f"Failed to join the group: {e}")
 
 
-async def AddMemberToGroup(client, group_link, user_id):
+async def add_members_to_group(client, group_link, user_id):
     """
-    AddMemberToGroup: Invites a user to a group/channel.
+    Invites a user to a group/channel.
     :param client: TelegramClient instance.
     :param group_link: The group or channel link to add a member to.
     :param user_id: The ID of the user to be invited.
@@ -255,8 +261,11 @@ async def AddMemberToGroup(client, group_link, user_id):
 
 
 async def main_do_mother():
+    """
+    Main function to handle joining a group and adding members to it using multiple accounts.
+    """
     try:
-        for account in accounts:
+        for account in ACCOUNTS:
             api_id = account["ApiId"]
             api_hash = account["ApiHash"]
             phone_number = account["PhoneNumber"]
@@ -266,26 +275,31 @@ async def main_do_mother():
                 api_id, api_hash, phone_number, session_file
             )
 
-            async def main_do_TelegramSection():
+            async def main_do_telegram_section():
+                members_id_list = get_members(client, F_GROUP_LINK, LIMIT_MESSAGES)
                 while members_id_list:
                     for user_id in members_id_list:
                         many_time = 0
                         while many_time < 11:
-                            await JoinToGroup(client, TGroupLink)
+                            await join_to_group(client, T_GROUP_LINK)
+                            await add_members_to_group(client, T_GROUP_LINK, user_id)
                             members_id_list.remove(user_id)
                             many_time += 1
 
-                    await asyncio.sleep(86400)
+                    await asyncio.sleep(86400)  # Sleep for 24 hours before repeating
 
-            await main_do_TelegramSection()
+            await main_do_telegram_section()
 
     except Exception as e:
         print(f"In main_do_mother Process something went wrong: {e}")
 
 
 async def main_check_mother():
+    """
+    Main function to check groups and members, and initiate the process to join and add members.
+    """
     try:
-        random_account = random.choice(accounts)
+        random_account = random.choice(ACCOUNTS)
         api_id = random_account["ApiId"]
         api_hash = random_account["ApiHash"]
         phone_number = random_account["PhoneNumber"]
@@ -295,31 +309,26 @@ async def main_check_mother():
             api_id, api_hash, phone_number, session_file
         )
 
-        async def main_check_TelegramSection():
-            Resual_Link_Orgin = await GeneralCheck(client, FGroupLink)
-            Resual_Link_Destination = await GeneralCheck(client, TGroupLink)
+        async def main_check_telegram_section():
+            result_link_origin = await general_check(client, F_GROUP_LINK)
+            result_link_destination = await general_check(client, T_GROUP_LINK)
 
-            if Resual_Link_Orgin and Resual_Link_Destination:
-                members_status = await MembersCheck(client, FGroupLink)
-
-                if members_status:
-                    global members_id_list
-                    members_id_list = await GetMembers(client, FGroupLink, limit_m)
-                    print("Checking finished, and found members.")
+            if result_link_origin and result_link_destination:
+                result_members_origin = await members_check(client, F_GROUP_LINK)
+                if result_members_origin:
+                    members_id_list = await get_members(client, F_GROUP_LINK)
                     await main_do_mother()
                 else:
-                    print("There is no member.")
+                    print("Members are hidden in the origin group.")
             else:
-                if not Resual_Link_Destination:
-                    print("Destination Link is Wrong.")
-                if not Resual_Link_Orgin:
-                    print("Origin Link is Wrong.")
+                print("One of the group links is not valid.")
 
-        await main_check_TelegramSection()
+        await main_check_telegram_section()
 
     except Exception as e:
         print(f"In main_check_mother Process something went wrong: {e}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main_check_mother())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main_check_mother())
