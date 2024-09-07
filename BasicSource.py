@@ -303,67 +303,95 @@ async def main_do_mother():
     """
     Main function to handle joining a group and adding members to it using multiple accounts.
     """
-    try:
-        for account in ACCOUNTS:
-            api_id = account["ApiId"]
-            api_hash = account["ApiHash"]
-            phone_number = account["PhoneNumber"]
-            session_file = account["SessionFile"]
 
-            client = await create_client(api_id, api_hash, phone_number, session_file)
+    if ACCOUNTS:
+        try:
+            for account in ACCOUNTS:
+                api_id = account["ApiId"]
+                api_hash = account["ApiHash"]
+                phone_number = account["PhoneNumber"]
+                session_file = account["SessionFile"]
 
-            async def main_do_telegram_section():
-                members_id_list = await get_members(
-                    client, F_GROUP_LINK, LIMIT_MESSAGES
+                client = await create_client(
+                    api_id, api_hash, phone_number, session_file
                 )
-                while members_id_list:
-                    for user_id in members_id_list:
-                        many_time = 0
-                        while many_time < 11:
-                            await join_to_group(client, T_GROUP_LINK)
-                            await add_members_to_group(client, T_GROUP_LINK, user_id)
-                            members_id_list.remove(user_id)
-                            many_time += 1
 
-                    await asyncio.sleep(86400)  # Sleep for 24 hours before repeating
+                async def main_do_telegram_section():
+                    members_id_list = await get_members(
+                        client, F_GROUP_LINK, LIMIT_MESSAGES
+                    )
+                    while members_id_list:
+                        for user_id in members_id_list:
+                            many_time = 0
+                            message.reply("Started Now.")
+                            while many_time < 11:
+                                await join_to_group(client, T_GROUP_LINK)
+                                await add_members_to_group(
+                                    client, T_GROUP_LINK, user_id
+                                )
+                                members_id_list.remove(user_id)
+                                many_time += 1
+                                members_id_list = list(members_id_list)
+                                all_of_times = len(members_id_list)
 
-            await main_do_telegram_section()
+                                all_number = int(many_time) * 100
+                                h = all_number // all_of_times
 
-    except Exception as e:
-        print(f"In main_do_mother Process something went wrong: {e}")
+                                text = f"""The process is in progress
+Registered members: {many_time}
+Percentage of work done: {h}
+
+Please be patient"""
+                                
+
+                        await asyncio.sleep(
+                            86400
+                        )  # Sleep for 24 hours before repeating
+
+                await main_do_telegram_section()
+
+        except Exception as e:
+            print(f"In main_do_mother Process something went wrong: {e}")
+
+    else:
+        print("There is no Account.")
 
 
 async def main_check_mother():
     """
     Main function to check groups and members, and initiate the process to join and add members.
     """
-    try:
-        random_account = random.choice(ACCOUNTS)
-        api_id = random_account["ApiId"]
-        api_hash = random_account["ApiHash"]
-        phone_number = random_account["PhoneNumber"]
-        session_file = random_account["SessionFile"]
+    if ACCOUNTS:
+        try:
+            random_account = random.choice(ACCOUNTS)
+            api_id = random_account["ApiId"]
+            api_hash = random_account["ApiHash"]
+            phone_number = random_account["PhoneNumber"]
+            session_file = random_account["SessionFile"]
 
-        client = await create_client(api_id, api_hash, phone_number, session_file)
+            client = await create_client(api_id, api_hash, phone_number, session_file)
 
-        async def main_check_telegram_section():
-            result_link_origin = await general_check(client, F_GROUP_LINK)
-            result_link_destination = await general_check(client, T_GROUP_LINK)
+            async def main_check_telegram_section():
+                result_link_origin = await general_check(client, F_GROUP_LINK)
+                result_link_destination = await general_check(client, T_GROUP_LINK)
 
-            if result_link_origin and result_link_destination:
-                result_members_origin = await members_check(client, F_GROUP_LINK)
-                if result_members_origin:
-                    members_id_list = await get_members(client, F_GROUP_LINK)
-                    await main_do_mother()
+                if result_link_origin and result_link_destination:
+                    result_members_origin = await members_check(client, F_GROUP_LINK)
+                    if result_members_origin:
+                        members_id_list = await get_members(client, F_GROUP_LINK)
+                        await main_do_mother()
+                    else:
+                        print("Members are hidden in the origin group.")
                 else:
-                    print("Members are hidden in the origin group.")
-            else:
-                print("One of the group links is not valid.")
+                    print("One of the group links is not valid.")
 
-        await main_check_telegram_section()
+            await main_check_telegram_section()
 
-    except Exception as e:
-        print(f"In main_check_mother Process something went wrong: {e}")
+        except Exception as e:
+            print(f"In main_check_mother Process something went wrong: {e}")
+
+    else:
+        print("The is no Account.")
 
 
 if __name__ == "__main__":
