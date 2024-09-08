@@ -77,7 +77,7 @@ async def general_check(client, group_link):
         InviteHashExpiredError,
         ChatAdminRequiredError,
     ) as e:
-        print(f"Error in general_check: {e}")
+        message.reply(f"Error in general_check: {e}")
         return False
 
 
@@ -112,7 +112,7 @@ async def members_check(client, group_link):
 
         return len(participants.users) == 0  # True if no participants fetched
     except Exception as e:
-        print(f"Error in members_check: {e}")
+        message.reply(f"Error in members_check: {e}")
         return False
 
 
@@ -178,7 +178,7 @@ async def get_members(
                     break
 
         except UserPrivacyRestrictedError:
-            print("Joining the group/channel is required to access messages.")
+            message.reply("Joining the group/channel is required to access messages.")
             try:
                 # If invite_link is provided, use it to join the private group/channel
                 if invite_link:
@@ -227,10 +227,10 @@ async def get_members(
                             break
 
             except Exception as e:
-                print(f"Error while trying to join the group/channel: {e}")
+                message.reply(f"Error while trying to join the group/channel: {e}")
 
         except Exception as e:
-            print(f"Error while fetching messages: {e}")
+            message.reply(f"Error while fetching messages: {e}")
 
     else:
         # If members are hidden, fetch members from the participant list
@@ -251,7 +251,7 @@ async def get_members(
             sender_ids = {participant.id for participant in participants.users}
 
         except FloodWaitError as e:
-            print(
+            message.reply(
                 f"Flood wait error: Need to wait for {e.seconds} seconds before retrying."
             )
             await asyncio.sleep(e.seconds)  # Wait before retrying
@@ -260,7 +260,7 @@ async def get_members(
             )
 
         except Exception as e:
-            print(f"Error while fetching participants: {e}")
+            message.reply(f"Error while fetching participants: {e}")
 
     return list(sender_ids)
 
@@ -274,11 +274,11 @@ async def join_to_group(client, group_link):
     try:
         username = group_link.split("/")[-1]  # Extract the username from the link
         await client(JoinChannelRequest(username))
-        print(f"Joined public group: {group_link}")
+        message.reply(f"Joined public group: {group_link}")
     except UserAlreadyParticipantError:
-        print("Already a member of the group.")
+        message.reply("Already a member of the group.")
     except Exception as e:
-        print(f"Failed to join the group: {e}")
+        message.reply(f"Failed to join the group: {e}")
 
 
 async def add_members_to_group(client, group_link, user_id):
@@ -293,10 +293,10 @@ async def add_members_to_group(client, group_link, user_id):
         group = await client.get_entity(username)  # Get the group entity
 
         await client(InviteToChannelRequest(channel=group, users=[user_id]))
-        print(f"User {user_id} has been invited to the group {group_link}.")
+        message.reply(f"User {user_id} has been invited to the group {group_link}.")
 
     except Exception as e:
-        print(f"Failed to invite user: {e}")
+        message.reply(f"Failed to invite user: {e}")
 
 
 async def main_do_mother():
@@ -312,10 +312,12 @@ async def main_do_mother():
                 phone_number = account["PhoneNumber"]
                 session_file = account["SessionFile"]
 
+                # ایجاد کلاینت برای هر اکانت
                 client = await create_client(
                     api_id, api_hash, phone_number, session_file
                 )
 
+                # تابع برای مدیریت فرآیند در هر اکانت
                 async def main_do_telegram_section():
                     members_id_list = await get_members(
                         client, F_GROUP_LINK, LIMIT_MESSAGES
@@ -323,38 +325,53 @@ async def main_do_mother():
                     while members_id_list:
                         for user_id in members_id_list:
                             many_time = 0
-                            message.reply("Started Now.")
+
+                            # ارسال پیام اولیه که فرآیند شروع شده است
+                            message = await client.send_message(chat_id, "Started Now.")
+
                             while many_time < 11:
+                                # جوین به گروه
                                 await join_to_group(client, T_GROUP_LINK)
+                                # افزودن اعضا به گروه
                                 await add_members_to_group(
                                     client, T_GROUP_LINK, user_id
                                 )
+
+                                # حذف کاربر از لیست پس از افزودن
                                 members_id_list.remove(user_id)
                                 many_time += 1
                                 members_id_list = list(members_id_list)
                                 all_of_times = len(members_id_list)
 
+                                # محاسبه درصد انجام کار
                                 all_number = int(many_time) * 100
                                 h = all_number // all_of_times
 
+                                # ساخت متن بروزرسانی شده
                                 text = f"""The process is in progress
 Registered members: {many_time}
-Percentage of work done: {h}
+Percentage of work done: {h}%
 
 Please be patient"""
-                                
 
-                        await asyncio.sleep(
-                            86400
-                        )  # Sleep for 24 hours before repeating
+                                # ویرایش پیام با اطلاعات جدید
+                                await message.edit_text(text)
 
+                        # وقفه 24 ساعته قبل از تکرار مجدد
+                        await asyncio.sleep(86400)
+
+                # اجرای تابع برای هر حساب
                 await main_do_telegram_section()
 
         except Exception as e:
-            print(f"In main_do_mother Process something went wrong: {e}")
+            # در صورت بروز خطا ارسال پیام هشدار
+            await client.send_message(
+                chat_id, f"In main_do_mother Process something went wrong: {e}"
+            )
 
     else:
-        print("There is no Account.")
+        # اگر حسابی در فایل وجود نداشت
+        await client.send_message(chat_id, "There is no Account.")
 
 
 async def main_check_mother():
@@ -381,14 +398,14 @@ async def main_check_mother():
                         members_id_list = await get_members(client, F_GROUP_LINK)
                         await main_do_mother()
                     else:
-                        print("Members are hidden in the origin group.")
+                        message.reply("Members are hidden in the origin group.")
                 else:
-                    print("One of the group links is not valid.")
+                    message.reply("One of the group links is not valid.")
 
             await main_check_telegram_section()
 
         except Exception as e:
-            print(f"In main_check_mother Process something went wrong: {e}")
+            message.reply(f"In main_check_mother Process something went wrong: {e}")
 
     else:
         print("The is no Account.")

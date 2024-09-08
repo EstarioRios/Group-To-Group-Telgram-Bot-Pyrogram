@@ -65,7 +65,7 @@ async def remove_account(api_id):
         for account in accounts_list:
             if account["ApiId"] == api_id:
                 accounts_list.remove(account)
-                print("Target Account Removed")
+                message.reply("Target Account Removed")
                 break
             else:
                 continue
@@ -96,4 +96,4 @@ async def view_accounts():
 
             text = "There is no Account"
 
-        print(text)
+        message.reply(text)
